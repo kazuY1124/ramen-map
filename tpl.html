@@ -1,0 +1,953 @@
+<title>ラーメンマップ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Roboto+Mono:wght@500&display=swap">
+<style>
+/* ===== Leaflet 1.9.4 (inlined: 外部スタイルシートは読み込めないため) ===== */
+/*__LEAFLET_CSS__*/
+
+/* ===== ラーメンマップ =====
+   Layout: 券売機のパネルのような縦積みの操作列 + 一覧。PC は左に操作と一覧(400px)、右に地図。
+           スマホは「一覧 / 地図」の切り替えで 1 画面に収める。 */
+:root{
+  --bg:#f2f1ed;
+  --surface:#fffefc;
+  --surface-2:#e8e6e0;
+  --fg:#17171e;
+  --muted:#64636f;
+  --line:#dbd8d0;
+  --accent:#c21f30;          /* 丼の朱 */
+  --accent-soft:#f7e3e3;
+  --accent-fg:#fffefc;
+  --indigo:#223a66;          /* のれんの藍 */
+  --star:#c98416;
+  --ok:#2d6b4a;
+  --shadow:0 1px 2px rgba(23,23,30,.07), 0 10px 28px rgba(23,23,30,.07);
+  --radius:12px;
+  --font-display:'Dela Gothic One','Hiragino Sans','Yu Gothic UI',system-ui,sans-serif;
+  --font-body:'Zen Kaku Gothic New','Hiragino Sans','Yu Gothic UI',system-ui,sans-serif;
+  --font-num:'Roboto Mono',ui-monospace,SFMono-Regular,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#14151b; --surface:#1d1f27; --surface-2:#262933; --fg:#eeedf1; --muted:#9d9daa;
+    --line:#2f323d; --accent:#ff5c6b; --accent-soft:#3a1f25; --accent-fg:#1a0206;
+    --indigo:#9fb8ef; --star:#e8b35c; --ok:#6cc294;
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 28px rgba(0,0,0,.42);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#14151b; --surface:#1d1f27; --surface-2:#262933; --fg:#eeedf1; --muted:#9d9daa;
+  --line:#2f323d; --accent:#ff5c6b; --accent-soft:#3a1f25; --accent-fg:#1a0206;
+  --indigo:#9fb8ef; --star:#e8b35c; --ok:#6cc294;
+  --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 28px rgba(0,0,0,.42);
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.5;-webkit-text-size-adjust:100%}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+.app{display:flex;flex-direction:column;height:100%;min-height:0}
+.gut{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* ---- ヘッダー ---- */
+.top{background:var(--surface);border-bottom:1px solid var(--line);flex:0 0 auto}
+.top-in{display:flex;flex-direction:column;gap:10px;padding-block:12px 10px;max-width:1500px;margin:0 auto;width:100%}
+.brandrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.brand{font-family:var(--font-display);font-size:1.22rem;font-weight:400;margin:0;letter-spacing:.01em;display:flex;align-items:center;gap:8px;color:var(--fg)}
+.brand svg{flex:0 0 auto}
+.brand-sub{font-size:.74rem;color:var(--muted);letter-spacing:.09em;margin-left:2px}
+.brandrow .spacer{flex:1 1 auto}
+
+.ctrls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.areabox{position:relative;flex:1 1 230px;min-width:0;display:flex;gap:6px}
+.areabox input{flex:1 1 auto;min-width:0;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 13px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);cursor:pointer;white-space:nowrap;font-weight:500}
+.btn:hover{border-color:var(--muted)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn-primary:hover{filter:brightness(1.07)}
+select.btn{padding-right:8px}
+.kw{flex:1 1 170px;min-width:0;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+
+.sug{position:absolute;z-index:1200;top:calc(100% + 4px);left:0;right:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);max-height:46vh;overflow:auto;padding:4px;margin:0;list-style:none}
+.sug li button{display:block;width:100%;text-align:left;padding:8px 10px;border:0;background:none;border-radius:8px;cursor:pointer}
+.sug li button:hover,.sug li button:focus{background:var(--surface-2)}
+.sug .s-name{font-weight:500}
+.sug .s-addr{display:block;font-size:.78rem;color:var(--muted)}
+
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:thin}
+.chip{padding:6px 11px;border:1px solid var(--line);border-radius:999px;background:var(--surface);cursor:pointer;font-size:.85rem;white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.chip[disabled]{opacity:.42;cursor:default}
+.chip .n{font-family:var(--font-num);font-size:.76rem;opacity:.75;margin-left:4px}
+
+.statusrow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;font-size:.84rem;color:var(--muted)}
+.statusrow strong{color:var(--fg);font-weight:700}
+.statusrow .num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.msg{font-size:.84rem;padding:8px 11px;border-radius:9px;border:1px solid var(--line);background:var(--surface-2)}
+.msg.err{border-color:var(--accent);background:var(--accent-soft);color:var(--fg)}
+
+.viewtabs{display:none;gap:4px;background:var(--surface-2);border-radius:999px;padding:3px}
+.viewtabs button{flex:1 1 0;padding:7px 10px;border:0;border-radius:999px;background:none;cursor:pointer;font-weight:500;font-size:.88rem}
+.viewtabs button[aria-pressed="true"]{background:var(--surface);box-shadow:var(--shadow)}
+
+/* ---- 本体 ---- */
+main{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:minmax(0,400px) minmax(0,1fr);max-width:1500px;margin:0 auto;width:100%}
+.pane{min-width:0;min-height:0;display:flex;flex-direction:column}
+.list-pane{border-right:1px solid var(--line);background:var(--surface)}
+.list-head{display:flex;align-items:center;gap:8px;padding:9px max(14px,env(safe-area-inset-left,0px)) 9px 14px;border-bottom:1px solid var(--line);flex:0 0 auto}
+.seg{display:flex;gap:3px;background:var(--surface-2);border-radius:999px;padding:3px}
+.seg button{border:0;background:none;padding:5px 11px;border-radius:999px;cursor:pointer;font-size:.84rem;font-weight:500}
+.seg button[aria-pressed="true"]{background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.list-head .count{margin-left:auto;font-size:.8rem;color:var(--muted);font-family:var(--font-num);font-variant-numeric:tabular-nums}
+
+.list{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;margin:0;padding:0;list-style:none}
+.shop{display:flex;align-items:stretch;gap:0;border-bottom:1px solid var(--line)}
+.shop-btn{flex:1 1 auto;min-width:0;display:flex;gap:10px;text-align:left;padding:11px 6px 11px 14px;border:0;background:none;cursor:pointer}
+.shop-btn:hover{background:var(--surface-2)}
+.shop[data-sel="1"]{background:var(--accent-soft)}
+.shop[data-sel="1"] .shop-btn:hover{background:var(--accent-soft)}
+.rank{flex:0 0 26px;font-family:var(--font-num);font-size:.78rem;color:var(--muted);padding-top:3px;font-variant-numeric:tabular-nums}
+.sbody{min-width:0;display:flex;flex-direction:column;gap:3px}
+.sname{font-weight:700;line-height:1.35;overflow-wrap:anywhere}
+.smeta{font-size:.79rem;color:var(--muted);overflow-wrap:anywhere}
+.sdist{font-family:var(--font-num);font-variant-numeric:tabular-nums;color:var(--fg);font-weight:500}
+.tagrow{display:flex;gap:4px;flex-wrap:wrap}
+.tag{font-size:.7rem;padding:1px 7px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);color:var(--muted)}
+.favbtn{flex:0 0 auto;width:44px;border:0;background:none;cursor:pointer;color:var(--line);font-size:1.15rem;line-height:1}
+.favbtn:hover{color:var(--star)}
+.favbtn[aria-pressed="true"]{color:var(--star)}
+.empty{padding:28px 16px;color:var(--muted);text-align:center;font-size:.9rem}
+
+.map-pane{position:relative;background:var(--surface-2)}
+#map{position:absolute;inset:0;background:var(--surface-2)}
+.map-note{position:absolute;z-index:900;left:10px;right:10px;top:10px;padding:8px 11px;border-radius:9px;background:var(--surface);border:1px solid var(--accent);box-shadow:var(--shadow);font-size:.8rem}
+.pinwrap{background:none;border:0}
+.pin{display:block;width:16px;height:16px;border-radius:50% 50% 50% 50%;background:var(--accent);border:2.5px solid var(--surface);box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.pin.fav{background:var(--star)}
+.pin.sel{width:24px;height:24px;background:var(--indigo);border-color:var(--surface);transform:translate(-4px,-4px)}
+.here{display:block;width:14px;height:14px;border-radius:50%;background:var(--indigo);border:3px solid var(--surface);box-shadow:0 0 0 6px color-mix(in srgb, var(--indigo) 22%, transparent)}
+.leaflet-container{background:var(--surface-2);font-family:var(--font-body)}
+.leaflet-popup-content-wrapper{border-radius:10px}
+
+/* ---- フッター(出典・必須表示) ---- */
+.foot{flex:0 0 auto;background:var(--surface);border-top:1px solid var(--line);font-size:.76rem;color:var(--muted)}
+.foot-in{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding-block:8px;max-width:1500px;margin:0 auto;width:100%}
+.foot a{color:var(--indigo)}
+.foot .lic{margin-left:auto;padding:5px 10px;font-size:.76rem;border-radius:8px}
+
+/* ---- ダイアログ ---- */
+.scrim{position:fixed;inset:0;z-index:2000;background:rgba(12,12,16,.5);display:flex;align-items:flex-end;justify-content:center;padding:0}
+@media (min-width:720px){.scrim{align-items:center;padding:24px}}
+.sheet{background:var(--surface);width:100%;max-width:520px;max-height:min(84vh,720px);overflow:auto;border-radius:16px 16px 0 0;box-shadow:var(--shadow);padding:18px max(18px,env(safe-area-inset-right,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px))}
+@media (min-width:720px){.sheet{border-radius:16px;padding-bottom:18px}}
+.sheet h2{font-family:var(--font-display);font-weight:400;font-size:1.1rem;margin:0 0 2px;text-wrap:balance;overflow-wrap:anywhere}
+.sheet .kana{font-size:.78rem;color:var(--muted);margin-bottom:12px}
+.dl{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:0 0 14px;font-size:.88rem}
+.dl dt{color:var(--muted)}
+.dl dd{margin:0;overflow-wrap:anywhere}
+.sheet .actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.sheet .actions a,.sheet .actions button{text-decoration:none}
+.srcnote{font-size:.74rem;color:var(--muted);border-top:1px solid var(--line);padding-top:10px;overflow-wrap:anywhere}
+.licbody{font-size:.82rem}
+.licbody h3{font-size:.86rem;margin:14px 0 4px}
+.licbody ul{margin:4px 0;padding-left:1.1em}
+.licbody li{margin-bottom:4px;overflow-wrap:anywhere}
+.closerow{display:flex;justify-content:flex-end;margin-top:14px}
+
+/* ---- スマホ ---- */
+@media (max-width:860px){
+  main{grid-template-columns:minmax(0,1fr)}
+  .list-pane{border-right:0}
+  .viewtabs{display:flex}
+  main[data-tab="list"] .map-pane{display:none}
+  main[data-tab="map"] .list-pane{display:none}
+  .brand{font-size:1.1rem}
+  .brand-sub{display:none}
+  .top-in{gap:8px;padding-block:10px 8px}
+  .statusrow{font-size:.78rem}
+}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="top-in gut">
+      <div class="brandrow">
+        <h1 class="brand">
+          <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+            <path d="M8 4.2c.7 1 .3 1.9-.3 2.7" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" opacity=".55"/>
+            <path d="M13 3c.8 1.2.3 2.2-.4 3.1" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" opacity=".55"/>
+            <path d="M18 4.2c.7 1 .3 1.9-.3 2.7" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" opacity=".55"/>
+            <path d="M2.5 10h21c0 6.6-4.7 11.5-10.5 11.5S2.5 16.6 2.5 10z" fill="var(--accent)"/>
+            <path d="M1.5 9.2h23v2.2h-23z" fill="var(--indigo)" rx="1"/>
+          </svg>
+          ラーメンマップ
+        </h1>
+        <span class="brand-sub">近くの一杯を探す</span>
+        <span class="spacer"></span>
+        <div class="viewtabs" role="group" aria-label="表示切り替え">
+          <button type="button" id="tabList" aria-pressed="true">一覧</button>
+          <button type="button" id="tabMap" aria-pressed="false">地図</button>
+        </div>
+      </div>
+
+      <div class="ctrls">
+        <form class="areabox" id="areaForm" autocomplete="off">
+          <input id="area" type="search" placeholder="駅名・地名で探す（例：新宿駅）" aria-label="駅名・地名で探す" role="combobox" aria-expanded="false" aria-controls="sug">
+          <button class="btn btn-primary" type="submit">探す</button>
+          <ul class="sug" id="sug" role="listbox" aria-label="候補" hidden></ul>
+        </form>
+        <button class="btn" type="button" id="geo">現在地から</button>
+        <select class="btn" id="radius" aria-label="検索半径">
+          <option value="500">500m</option>
+          <option value="1000" selected>1km</option>
+          <option value="2000">2km</option>
+          <option value="5000">5km</option>
+        </select>
+        <input class="kw" id="kw" type="search" placeholder="店名で絞り込み" aria-label="店名で絞り込み">
+      </div>
+
+      <div class="chips" id="chips" role="group" aria-label="ジャンル"></div>
+
+      <div class="statusrow" id="status"></div>
+      <div class="msg" id="msg" hidden></div>
+    </div>
+  </header>
+
+  <main id="main" data-tab="list">
+    <section class="pane list-pane" aria-label="店舗一覧">
+      <div class="list-head">
+        <div class="seg" role="group" aria-label="一覧の種類">
+          <button type="button" id="modeNear" aria-pressed="true">近い順</button>
+          <button type="button" id="modeFav" aria-pressed="false">★ お気に入り</button>
+        </div>
+        <span class="count" id="listCount"></span>
+      </div>
+      <ul class="list" id="list"></ul>
+    </section>
+    <section class="pane map-pane" aria-label="地図">
+      <div id="map"></div>
+      <div class="map-note" id="mapNote" hidden></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-in gut">
+      <span>施設データ 出典: <a href="https://openpoiapi.com/attribution.html" target="_blank" rel="noopener">OpenPOI API</a></span>
+      <span>地図: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a></span>
+      <button class="btn lic" type="button" id="licBtn">出典・ライセンス詳細</button>
+    </div>
+  </footer>
+</div>
+
+<div class="scrim" id="scrim" hidden>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" tabindex="-1"></div>
+</div>
+
+<!--
+  OpenPOI API のデータソースに Foursquare OS Places (Apache-2.0) が含まれます。
+  NOTICE: Copyright 2024 Foursquare Labs, Inc.  https://opensource.foursquare.com/places-notice-txt/
+  その他の出典は画面下部「出典・ライセンス詳細」および各店舗の詳細に表示しています。
+-->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* ========== 収録データ(初期表示用・新宿駅周辺1km / 出典は attributions に保持) ========== */
+  var SEED = /*__SEED__*/null;
+  var SEED_CENTER = { lat: 35.689790, lng: 139.700203, label: '新宿駅', radius: 1000 };
+
+  var API = 'https://api.openpoiapi.com';
+  var KEYWORDS = ['ラーメン', '麺', '中華そば', 'つけ麺', '家系', '二郎', '担々麺'];
+
+  var RAMEN_RE = /(ラーメン|らーめん|らあめん|ラァメン|らぁ麺|らー麺|拉麺|中華そば|中華蕎麦|中華ソバ|つけ麺|つけめん|付け麺|つけそば|まぜそば|混ぜそば|油そば|あぶらそば|麺屋|麺処|麺や|麺家|麺匠|麺創|麺道|麺場|麺者|麺将|製麺|二郎|家系|とんこつ|豚骨|担担麺|担々麺|タンタンメン|タンメン|ramen|一蘭|一風堂|IPPUDO|PPUDO|天下一品|日高屋|幸楽苑|山岡家|魁力屋|丸源|来来亭|壱角家|壹角家|横濱|田中商店|中本|風雲児|ばんから|づゅる|せたが屋|えびそば|風龍|こうかいぼう|喜多方|博多|長浜)/i;
+  var HARD_NG = /(洋麺屋|五右衛門|スパゲ|パスタ|焼肉|寿司|回転寿司|カフェ|cafe|ベーカリー|薬局|歯科|クリニック)/i;
+  var SOFT_NG = /(うどん|饂飩|そば処|手打ちそば|立ち食いそば|すし処|焼鳥|やきとり|coffee|イタリア|フレンチ|居酒屋|カレー|パン|洋菓子|ケーキ|ドラッグ|美容|理容|サロン|ホテル|学校|駐車場|銀行|病院|書店|ジム|ネイル|保育|神社|寺|公園|交番|郵便|コンビニ|セブン|ローソン|ファミリーマート)/i;
+  var SOFT_OK = /(ラーメン|らーめん|中華そば|つけ麺|麺屋|麺処|製麺|二郎|家系)/;
+  var OK_CAT = { restaurant: 1, unknown: 1, bar_izakaya: 1, '': 1 };
+
+  var GENRES = [
+    { id: 'all', label: 'すべて' },
+    { id: 'shoyu', label: '醤油', re: /(醤油|しょうゆ|正油|中華そば|中華蕎麦|中華ソバ)/ },
+    { id: 'miso', label: '味噌', re: /(味噌|みそ|ミソ|札幌)/ },
+    { id: 'shio', label: '塩', re: /(塩|しお|シオ)/ },
+    { id: 'tonkotsu', label: '豚骨・家系', re: /(とんこつ|豚骨|家系|横濱|横浜|一蘭|一風堂|PPUDO|博多|長浜|風龍|山岡家|壱角家|壹角家)/i },
+    { id: 'tsukemen', label: 'つけ麺・まぜそば', re: /(つけ麺|つけめん|付け麺|つけそば|まぜそば|混ぜそば|油そば|あぶらそば|製麺所)/ },
+    { id: 'jiro', label: '二郎系', re: /(二郎|ジロー|野郎)/ },
+    { id: 'tantan', label: '担々麺', re: /(担担|担々|タンタン|四川)/ }
+  ];
+  var SOURCE_LABEL = {
+    overture: 'Overture Maps',
+    jff: '食品営業許可・届出データ',
+    n02: '国土数値情報',
+    p29: '国土数値情報',
+    p05: '国土数値情報'
+  };
+
+  /* ========== ユーティリティ ========== */
+  function dist(lat1, lng1, lat2, lng2) {
+    var R = 6371000, r = Math.PI / 180;
+    var dp = (lat2 - lat1) * r, dl = (lng2 - lng1) * r;
+    var a = Math.sin(dp / 2) * Math.sin(dp / 2) +
+      Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin(dl / 2) * Math.sin(dl / 2);
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+  }
+  function fmtDist(m) { return m < 1000 ? Math.round(m) + 'm' : (m / 1000).toFixed(m < 10000 ? 2 : 1) + 'km'; }
+  function fmtRadius(m) { return m < 1000 ? m + 'm' : m / 1000 + 'km'; }
+  function normName(s) {
+    return String(s || '').normalize('NFKC').replace(/[\s　]+/g, '')
+      .replace(/[【】\[\]（）()・,，.。'"”’`~!！?？\-ー−–—_\/／]/g, '').toLowerCase();
+  }
+  function keyOf(s) { return normName(s.name) + '@' + s.lat.toFixed(4) + ',' + s.lng.toFixed(4); }
+  /* 住所から市区町村だけ取り出す。外部サイトの検索語に住所を丸ごと渡すと当たらないため */
+  function cityOf(addr) {
+    var m = /^(.+?[都道府県])(.+?[市区町村])/.exec(String(addr || ''));
+    if (!m) return '';
+    /* 「帯広市」は単独で通じるが、「中央区」のような区名は都道府県と組にする */
+    return /[市町村]$/.test(m[2]) ? m[2] : m[1] + m[2];
+  }
+  function isRamen(p) {
+    var n = p.name || '';
+    if (!OK_CAT[p.category || '']) return false;
+    if (HARD_NG.test(n)) return false;
+    if (!RAMEN_RE.test(n)) return false;
+    if (SOFT_NG.test(n) && !SOFT_OK.test(n)) return false;
+    return true;
+  }
+  function genresOf(name) {
+    var out = [];
+    for (var i = 1; i < GENRES.length; i++) if (GENRES[i].re.test(name)) out.push(GENRES[i].id);
+    return out;
+  }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  /* ========== 状態 ========== */
+  var S = {
+    center: { lat: SEED_CENTER.lat, lng: SEED_CENTER.lng, label: SEED_CENTER.label },
+    radius: SEED_CENTER.radius,
+    shops: [],
+    genre: 'all',
+    kw: '',
+    mode: 'near',
+    sel: null,
+    loading: false,
+    seeded: true
+  };
+  var favs = loadFavs();
+  var cache = Object.create(null);
+
+  function loadFavs() {
+    try {
+      var raw = localStorage.getItem('ramenmap.favs');
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) { return {}; }
+  }
+  function saveFavs() {
+    try { localStorage.setItem('ramenmap.favs', JSON.stringify(favs)); } catch (e) { /* 保存できない環境でも動作させる */ }
+  }
+
+  /* ========== 収録データの展開 ========== */
+  function expandSeed() {
+    if (!SEED || !SEED.r) return [];
+    return SEED.r.map(function (row) {
+      return {
+        name: row[0], kana: row[1], address: row[2], lat: row[3], lng: row[4],
+        source: row[5], attributions: row[6].map(function (i) { return SEED.a[i]; })
+      };
+    });
+  }
+
+  /* ========== API ========== */
+  function bboxOf(lat, lng, radius) {
+    var dLat = radius / 111320;
+    var dLng = radius / (111320 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
+    return [lng - dLng, lat - dLat, lng + dLng, lat + dLat].map(function (v) { return v.toFixed(6); }).join(',');
+  }
+  function getJSON(path, params) {
+    var qs = Object.keys(params).map(function (k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+    }).join('&');
+    return fetch(API + path + '?' + qs, { headers: { Accept: 'application/json' } }).then(function (r) {
+      if (r.status === 429) throw new Error('アクセスが集中しています。少し待ってからもう一度お試しください。');
+      if (!r.ok) throw new Error('検索に失敗しました（HTTP ' + r.status + '）');
+      return r.json();
+    });
+  }
+  /* 同時 4 本までで順に流す */
+  function pooled(items, worker, size) {
+    var i = 0, out = [];
+    function next() {
+      if (i >= items.length) return Promise.resolve();
+      var at = i++;
+      return worker(items[at]).then(function (v) { out[at] = v; }, function () { out[at] = null; }).then(next);
+    }
+    var runners = [];
+    for (var k = 0; k < Math.min(size, items.length); k++) runners.push(next());
+    return Promise.all(runners).then(function () { return out; });
+  }
+
+  function collect(center, radius, extraKw) {
+    var cacheKey = center.lat.toFixed(4) + ',' + center.lng.toFixed(4) + ',' + radius + ',' + (extraKw || '');
+    var hit = cache[cacheKey];
+    if (hit && Date.now() - hit.at < 300000) return Promise.resolve(hit.v);
+
+    var bbox = bboxOf(center.lat, center.lng, radius);
+    var kws = KEYWORDS.slice();
+    if (extraKw && kws.indexOf(extraKw) < 0) kws.unshift(extraKw);
+
+    return pooled(kws, function (kw) {
+      return getJSON('/v1/search', { q: kw, bbox: bbox, limit: 200 });
+    }, 4).then(function (pages) {
+      var any = pages.some(function (p) { return p && p.results; });
+      if (!any) throw new Error('施設データを取得できませんでした。通信環境をご確認ください。');
+      var kept = [], byKey = Object.create(null);
+      pages.forEach(function (page) {
+        (page && page.results ? page.results : []).forEach(function (p) {
+          if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
+          var d = dist(center.lat, center.lng, p.lat, p.lng);
+          if (d > radius || !isRamen(p)) return;
+          var nk = normName(p.name);
+          var dup = null;
+          var bucket = byKey[nk];
+          if (bucket) {
+            for (var i = 0; i < bucket.length; i++) {
+              if (dist(bucket[i].lat, bucket[i].lng, p.lat, p.lng) < 80) { dup = bucket[i]; break; }
+            }
+          }
+          var attrs = p.attributions || [];
+          if (dup) {
+            if ((p.address || '').length > (dup.address || '').length) dup.address = p.address;
+            if (!dup.kana && p.name_kana) dup.kana = p.name_kana;
+            attrs.forEach(function (a) { if (dup.attributions.indexOf(a) < 0) dup.attributions.push(a); });
+            return;
+          }
+          var shop = {
+            name: p.name, kana: p.name_kana || '',
+            address: p.address || ((p.prefecture || '') + (p.city || '')),
+            lat: p.lat, lng: p.lng, source: p.source || '',
+            attributions: attrs.slice()
+          };
+          kept.push(shop);
+          (byKey[nk] = byKey[nk] || []).push(shop);
+        });
+      });
+      cache[cacheKey] = { at: Date.now(), v: kept };
+      return kept;
+    });
+  }
+
+  /* ========== 地図 ========== */
+  var map = null, markers = {}, hereMarker = null, radiusCircle = null, tilesOk = true;
+  function initMap() {
+    if (!window.L) {
+      note('地図ライブラリを読み込めなかったため、一覧のみ表示しています。', true);
+      return;
+    }
+    map = L.map('map', { center: [S.center.lat, S.center.lng], zoom: 15, zoomControl: true, attributionControl: true });
+    var tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    });
+    var failed = 0;
+    tiles.on('tileerror', function () {
+      failed++;
+      if (failed > 3 && tilesOk) {
+        tilesOk = false;
+        note('地図のタイル画像を読み込めませんでした。位置関係のみ表示しています。', true);
+      }
+    });
+    tiles.addTo(map);
+    map.on('click', function () { select(null); });
+  }
+  function note(text, isErr) {
+    var n = document.getElementById('mapNote');
+    n.textContent = text;
+    n.hidden = !text;
+    n.style.borderColor = isErr ? 'var(--accent)' : 'var(--line)';
+  }
+
+  function drawMap(list) {
+    if (!map) return;
+    Object.keys(markers).forEach(function (k) { map.removeLayer(markers[k]); });
+    markers = {};
+    if (hereMarker) { map.removeLayer(hereMarker); hereMarker = null; }
+    if (radiusCircle) { map.removeLayer(radiusCircle); radiusCircle = null; }
+
+    radiusCircle = L.circle([S.center.lat, S.center.lng], {
+      radius: S.radius, color: getComputedStyle(document.documentElement).getPropertyValue('--indigo').trim() || '#223a66',
+      weight: 1, opacity: .5, fillOpacity: .05, interactive: false
+    }).addTo(map);
+    hereMarker = L.marker([S.center.lat, S.center.lng], {
+      icon: L.divIcon({ className: 'pinwrap', html: '<span class="here"></span>', iconSize: [14, 14], iconAnchor: [7, 7] }),
+      title: S.center.label, keyboard: false
+    }).addTo(map);
+
+    list.forEach(function (s) {
+      var k = keyOf(s);
+      var cls = 'pin' + (favs[k] ? ' fav' : '') + (S.sel === k ? ' sel' : '');
+      var m = L.marker([s.lat, s.lng], {
+        icon: L.divIcon({ className: 'pinwrap', html: '<span class="' + cls + '"></span>', iconSize: [16, 16], iconAnchor: [8, 8] }),
+        title: s.name, alt: s.name
+      });
+      m.on('click', function () { select(k); openSheet(s); });
+      m.addTo(map);
+      markers[k] = m;
+    });
+
+    var pad = list.length ? list.map(function (s) { return [s.lat, s.lng]; }) : null;
+    if (pad) {
+      pad.push([S.center.lat, S.center.lng]);
+      map.fitBounds(L.latLngBounds(pad).pad(0.12), { animate: false, maxZoom: 17 });
+    } else {
+      map.setView([S.center.lat, S.center.lng], 15, { animate: false });
+    }
+  }
+
+  /* ========== 絞り込みと描画 ========== */
+  function visible() {
+    var base = S.mode === 'fav'
+      ? Object.keys(favs).map(function (k) { return favs[k]; })
+      : S.shops;
+    var kw = normName(S.kw);
+    var g = GENRES.filter(function (x) { return x.id === S.genre; })[0];
+    var out = base.filter(function (s) {
+      if (kw && normName(s.name).indexOf(kw) < 0 && normName(s.address).indexOf(kw) < 0) return false;
+      if (g && g.re && !g.re.test(s.name)) return false;
+      return true;
+    });
+    out.forEach(function (s) { s._d = dist(S.center.lat, S.center.lng, s.lat, s.lng); });
+    out.sort(function (a, b) { return a._d - b._d; });
+    return out.slice(0, 200);
+  }
+
+  function renderChips() {
+    var box = document.getElementById('chips');
+    var base = S.mode === 'fav' ? Object.keys(favs).map(function (k) { return favs[k]; }) : S.shops;
+    box.textContent = '';
+    GENRES.forEach(function (g) {
+      var n = g.re ? base.filter(function (s) { return g.re.test(s.name); }).length : base.length;
+      var b = el('button', 'chip');
+      b.type = 'button';
+      b.setAttribute('aria-pressed', S.genre === g.id ? 'true' : 'false');
+      b.appendChild(document.createTextNode(g.label));
+      var c = el('span', 'n', String(n));
+      b.appendChild(c);
+      if (n === 0 && g.id !== 'all') b.disabled = true;
+      b.addEventListener('click', function () { S.genre = g.id; render(); });
+      box.appendChild(b);
+    });
+  }
+
+  function renderStatus() {
+    var st = document.getElementById('status');
+    st.textContent = '';
+    if (S.loading) {
+      st.appendChild(el('span', null, '検索中…'));
+      return;
+    }
+    var f = document.createDocumentFragment();
+    var a = el('span');
+    a.appendChild(el('strong', null, S.center.label));
+    a.appendChild(document.createTextNode(' から半径 '));
+    var r = el('span', 'num', fmtRadius(S.radius));
+    a.appendChild(r);
+    f.appendChild(a);
+    var b = el('span');
+    b.appendChild(el('span', 'num', String(S.shops.length)));
+    b.appendChild(document.createTextNode(' 軒'));
+    f.appendChild(b);
+    if (S.seeded) f.appendChild(el('span', null, '収録データを表示中（エリアや半径を変えると最新を取得します）'));
+    st.appendChild(f);
+  }
+
+  function renderList(list) {
+    var ul = document.getElementById('list');
+    ul.textContent = '';
+    document.getElementById('listCount').textContent = list.length + ' 件';
+    if (!list.length) {
+      var li = el('li');
+      li.appendChild(el('div', 'empty', S.mode === 'fav'
+        ? 'お気に入りはまだありません。一覧の ★ を押すと追加できます。'
+        : '条件に合うお店が見つかりませんでした。半径を広げるか、ジャンルの絞り込みを外してみてください。'));
+      ul.appendChild(li);
+      return;
+    }
+    list.forEach(function (s, i) {
+      var k = keyOf(s);
+      var li = el('li', 'shop');
+      li.dataset.key = k;
+      if (S.sel === k) li.dataset.sel = '1';
+
+      var btn = el('button', 'shop-btn');
+      btn.type = 'button';
+      btn.appendChild(el('span', 'rank', String(i + 1)));
+      var body = el('span', 'sbody');
+      /* 元データに説明文ごと店名に入った行があるため、一覧では省略して表示する */
+      var shortName = s.name.length > 34 ? s.name.slice(0, 34) + '…' : s.name;
+      var nameEl = el('span', 'sname', shortName);
+      if (shortName !== s.name) nameEl.title = s.name;
+      body.appendChild(nameEl);
+      var meta = el('span', 'smeta');
+      meta.appendChild(el('span', 'sdist', fmtDist(s._d)));
+      meta.appendChild(document.createTextNode(' · ' + (s.address || '住所不明')));
+      body.appendChild(meta);
+      var tags = genresOf(s.name);
+      if (tags.length) {
+        var tr = el('span', 'tagrow');
+        tags.slice(0, 3).forEach(function (id) {
+          var g = GENRES.filter(function (x) { return x.id === id; })[0];
+          tr.appendChild(el('span', 'tag', g.label));
+        });
+        body.appendChild(tr);
+      }
+      btn.appendChild(body);
+      btn.addEventListener('click', function () {
+        select(k);
+        openSheet(s);
+        if (map && window.innerWidth <= 860) { /* 一覧タブのままにする */ }
+        else if (map) map.panTo([s.lat, s.lng], { animate: true });
+      });
+      li.appendChild(btn);
+
+      var fav = el('button', 'favbtn', '★');
+      fav.type = 'button';
+      fav.setAttribute('aria-pressed', favs[k] ? 'true' : 'false');
+      fav.setAttribute('aria-label', (favs[k] ? 'お気に入りから外す: ' : 'お気に入りに追加: ') + s.name);
+      fav.addEventListener('click', function () { toggleFav(s); });
+      li.appendChild(fav);
+
+      ul.appendChild(li);
+    });
+  }
+
+  function render() {
+    var list = visible();
+    renderChips();
+    renderStatus();
+    renderList(list);
+    drawMap(list);
+    document.getElementById('modeNear').setAttribute('aria-pressed', S.mode === 'near' ? 'true' : 'false');
+    document.getElementById('modeFav').setAttribute('aria-pressed', S.mode === 'fav' ? 'true' : 'false');
+  }
+
+  function select(k) {
+    S.sel = k;
+    var items = document.querySelectorAll('.shop');
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].dataset.key === k) items[i].dataset.sel = '1';
+      else delete items[i].dataset.sel;
+    }
+    Object.keys(markers).forEach(function (mk) {
+      var span = markers[mk].getElement() && markers[mk].getElement().firstChild;
+      if (!span) return;
+      span.className = 'pin' + (favs[mk] ? ' fav' : '') + (k === mk ? ' sel' : '');
+    });
+  }
+
+  function toggleFav(s) {
+    var k = keyOf(s);
+    if (favs[k]) delete favs[k];
+    else favs[k] = { name: s.name, kana: s.kana, address: s.address, lat: s.lat, lng: s.lng, source: s.source, attributions: s.attributions };
+    saveFavs();
+    render();
+  }
+
+  /* ========== 詳細シート ========== */
+  var lastFocus = null;
+  function openSheet(s) {
+    var sheet = document.getElementById('sheet');
+    var k = keyOf(s);
+    sheet.textContent = '';
+    var h = el('h2', null, s.name);
+    h.id = 'sheetTitle';
+    sheet.appendChild(h);
+    if (s.kana) sheet.appendChild(el('div', 'kana', s.kana));
+
+    var dl = el('dl', 'dl');
+    function row(label, value) {
+      dl.appendChild(el('dt', null, label));
+      dl.appendChild(el('dd', null, value));
+    }
+    row('住所', s.address || '住所不明');
+    row(S.center.label + 'から', fmtDist(dist(S.center.lat, S.center.lng, s.lat, s.lng)));
+    var tags = genresOf(s.name);
+    row('ジャンル推定', tags.length ? tags.map(function (id) {
+      return GENRES.filter(function (x) { return x.id === id; })[0].label;
+    }).join('・') : '不明（店名から推定しています）');
+    row('座標', s.lat.toFixed(5) + ', ' + s.lng.toFixed(5));
+    sheet.appendChild(dl);
+
+    var acts = el('div', 'actions');
+    /* 食べログ・ぐるなびの API は提供終了しているため、検索リンクで口コミ側へ渡す */
+    var place = cityOf(s.address);
+    function link(cls, label, href) {
+      var a = el('a', cls, label);
+      a.href = href;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      acts.appendChild(a);
+    }
+    link('btn btn-primary', '食べログで探す',
+      'https://tabelog.com/rstLst/?sw=' + encodeURIComponent(s.name + (place ? ' ' + place : '')));
+    link('btn', 'Google マップで開く',
+      'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(s.name + ' ' + (s.address || '')));
+    link('btn', '経路を調べる',
+      'https://www.google.com/maps/dir/?api=1&destination=' + s.lat + ',' + s.lng);
+    link('btn', 'X で検索',
+      'https://x.com/search?f=live&q=' + encodeURIComponent(s.name + (place ? ' ' + place : '')));
+    var fb = el('button', 'btn', favs[k] ? '★ お気に入り登録済み' : '☆ お気に入りに追加');
+    fb.type = 'button';
+    fb.addEventListener('click', function () {
+      toggleFav(s);
+      fb.textContent = favs[keyOf(s)] ? '★ お気に入り登録済み' : '☆ お気に入りに追加';
+    });
+    acts.appendChild(fb);
+    sheet.appendChild(acts);
+
+    var src = el('div', 'srcnote');
+    src.appendChild(el('div', null, 'データ出典: ' + (SOURCE_LABEL[s.source] || s.source || '不明')));
+    (s.attributions || []).forEach(function (a) { src.appendChild(el('div', null, a)); });
+    src.appendChild(el('div', null, '出典: OpenPOI API（https://openpoiapi.com/attribution.html）'));
+    sheet.appendChild(src);
+
+    var cr = el('div', 'closerow');
+    var cb = el('button', 'btn', '閉じる');
+    cb.type = 'button';
+    cb.addEventListener('click', closeSheet);
+    cr.appendChild(cb);
+    sheet.appendChild(cr);
+    showScrim();
+  }
+
+  function openLicense() {
+    var sheet = document.getElementById('sheet');
+    sheet.textContent = '';
+    var h = el('h2', null, '出典・ライセンス');
+    h.id = 'sheetTitle';
+    sheet.appendChild(h);
+    var body = el('div', 'licbody');
+
+    var p1 = el('p');
+    p1.appendChild(document.createTextNode('施設データの出典: '));
+    var a1 = el('a', null, 'OpenPOI API');
+    a1.href = 'https://openpoiapi.com/attribution.html';
+    a1.target = '_blank'; a1.rel = 'noopener';
+    p1.appendChild(a1);
+    p1.appendChild(document.createTextNode('（出典: OpenPOI API / https://openpoiapi.com/attribution.html）'));
+    body.appendChild(p1);
+
+    body.appendChild(el('h3', null, '含まれるデータソース'));
+    var ul = el('ul');
+    [
+      'Overture Maps Foundation, overturemaps.org（CDLA-Permissive-2.0 / CC0-1.0）',
+      'Foursquare OS Places — Copyright 2024 Foursquare Labs, Inc.（Apache-2.0、NOTICE: https://opensource.foursquare.com/places-notice-txt/）',
+      '全国の食品営業許可・届出施設のオープンデータ（CC BY 4.0 / PDL1.0 ほか、各自治体）',
+      '「国土数値情報（鉄道データ N02 / 市区町村役場等 P05 / 公共施設 P29）」（国土交通省）',
+      '地図タイル: © OpenStreetMap contributors（ODbL）'
+    ].forEach(function (t) { ul.appendChild(el('li', null, t)); });
+    body.appendChild(ul);
+
+    body.appendChild(el('h3', null, 'この画面に表示中のデータの出典表記'));
+    var shown = {};
+    (S.shops.length ? S.shops : []).forEach(function (s) {
+      (s.attributions || []).forEach(function (a) { shown[a] = 1; });
+    });
+    var ul2 = el('ul');
+    var keys = Object.keys(shown);
+    if (!keys.length) ul2.appendChild(el('li', null, '（表示中のデータなし）'));
+    keys.forEach(function (a) { ul2.appendChild(el('li', null, a)); });
+    body.appendChild(ul2);
+
+    body.appendChild(el('h3', null, '注意'));
+    var note2 = el('p', null, 'OpenPOI API は電話番号・営業時間・定休日を返しません。営業状況や味の情報は各店の公式情報をご確認ください。店名からジャンルを推定しているため、実際の内容と異なる場合があります。');
+    body.appendChild(note2);
+    sheet.appendChild(body);
+
+    var cr = el('div', 'closerow');
+    var cb = el('button', 'btn', '閉じる');
+    cb.type = 'button';
+    cb.addEventListener('click', closeSheet);
+    cr.appendChild(cb);
+    sheet.appendChild(cr);
+    showScrim();
+  }
+
+  function showScrim() {
+    lastFocus = document.activeElement;
+    document.getElementById('scrim').hidden = false;
+    document.getElementById('sheet').focus();
+  }
+  function closeSheet() {
+    document.getElementById('scrim').hidden = true;
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+  document.getElementById('scrim').addEventListener('click', function (e) {
+    if (e.target === e.currentTarget) closeSheet();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      if (!document.getElementById('scrim').hidden) closeSheet();
+      else hideSug();
+    }
+  });
+
+  /* ========== メッセージ ========== */
+  function msg(text, isErr) {
+    var m = document.getElementById('msg');
+    m.textContent = text || '';
+    m.hidden = !text;
+    m.className = 'msg' + (isErr ? ' err' : '');
+  }
+
+  /* ========== 検索の実行 ========== */
+  function search(center, radius) {
+    S.loading = true;
+    S.seeded = false;
+    msg('');
+    renderStatus();
+    document.getElementById('listCount').textContent = '…';
+    return collect(center, radius, '').then(function (shops) {
+      S.center = center;
+      S.radius = radius;
+      S.shops = shops;
+      S.sel = null;
+      S.loading = false;
+      if (!shops.length) msg(center.label + ' の周辺 ' + fmtRadius(radius) + ' ではラーメン店が見つかりませんでした。半径を広げてみてください。');
+      render();
+    }, function (err) {
+      S.loading = false;
+      msg(err && err.message ? err.message : '検索に失敗しました。', true);
+      render();
+    });
+  }
+
+  function resolveArea(q) {
+    return getJSON('/v1/search', { q: q, limit: 20 }).then(function (j) {
+      var rs = (j.results || []).filter(function (p) { return typeof p.lat === 'number'; });
+      if (!rs.length) return null;
+      var station = rs.filter(function (p) { return p.category === 'station'; })[0];
+      var p = station || rs[0];
+      return { lat: p.lat, lng: p.lng, label: p.name };
+    });
+  }
+
+  /* ========== エリア入力の補完 ========== */
+  var sugTimer = null, sugItems = [];
+  function hideSug() {
+    var s = document.getElementById('sug');
+    s.hidden = true;
+    s.textContent = '';
+    document.getElementById('area').setAttribute('aria-expanded', 'false');
+  }
+  function showSug(items) {
+    var box = document.getElementById('sug');
+    box.textContent = '';
+    if (!items.length) { hideSug(); return; }
+    items.forEach(function (p) {
+      var li = el('li');
+      var b = el('button');
+      b.type = 'button';
+      b.setAttribute('role', 'option');
+      b.appendChild(el('span', 's-name', p.name));
+      b.appendChild(el('span', 's-addr', (p.prefecture || '') + (p.city || '') + (p.category === 'station' ? ' · 駅' : '')));
+      b.addEventListener('click', function () {
+        document.getElementById('area').value = p.name;
+        hideSug();
+        search({ lat: p.lat, lng: p.lng, label: p.name }, S.radius);
+      });
+      li.appendChild(b);
+      box.appendChild(li);
+    });
+    box.hidden = false;
+    document.getElementById('area').setAttribute('aria-expanded', 'true');
+  }
+  document.getElementById('area').addEventListener('input', function (e) {
+    var q = e.target.value.trim();
+    if (sugTimer) clearTimeout(sugTimer);
+    if (q.length < 2) { hideSug(); return; }
+    sugTimer = setTimeout(function () {
+      getJSON('/v1/suggest', { q: q, limit: 8 }).then(function (j) {
+        sugItems = (j.suggestions || []).filter(function (p) { return typeof p.lat === 'number'; });
+        showSug(sugItems);
+      }, function () { hideSug(); });
+    }, 300);
+  });
+  document.getElementById('area').addEventListener('blur', function () {
+    setTimeout(hideSug, 180);
+  });
+
+  /* ========== イベント ========== */
+  document.getElementById('areaForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    hideSug();
+    var q = document.getElementById('area').value.trim();
+    if (!q) return;
+    S.loading = true; renderStatus();
+    resolveArea(q).then(function (c) {
+      if (!c) { S.loading = false; msg('「' + q + '」に合う場所が見つかりませんでした。駅名（例：新宿駅）で試してみてください。', true); renderStatus(); return; }
+      search(c, S.radius);
+    }, function (err) {
+      S.loading = false;
+      msg(err && err.message ? err.message : '場所の検索に失敗しました。', true);
+      renderStatus();
+    });
+  });
+
+  document.getElementById('geo').addEventListener('click', function () {
+    if (!navigator.geolocation) {
+      msg('このブラウザでは現在地を取得できません。上の入力欄からエリア検索をお使いください。', true);
+      return;
+    }
+    msg('現在地を取得しています…');
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      msg('');
+      document.getElementById('area').value = '';
+      search({ lat: pos.coords.latitude, lng: pos.coords.longitude, label: '現在地' }, S.radius);
+    }, function () {
+      msg('現在地を取得できませんでした。位置情報の許可を確認するか、エリア検索をお使いください。', true);
+    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+  });
+
+  document.getElementById('radius').addEventListener('change', function (e) {
+    var r = parseInt(e.target.value, 10);
+    search({ lat: S.center.lat, lng: S.center.lng, label: S.center.label }, r);
+  });
+
+  var kwTimer = null;
+  document.getElementById('kw').addEventListener('input', function (e) {
+    S.kw = e.target.value;
+    if (kwTimer) clearTimeout(kwTimer);
+    kwTimer = setTimeout(render, 160);
+  });
+
+  document.getElementById('modeNear').addEventListener('click', function () { S.mode = 'near'; S.genre = 'all'; render(); });
+  document.getElementById('modeFav').addEventListener('click', function () { S.mode = 'fav'; S.genre = 'all'; render(); });
+
+  function setTab(t) {
+    document.getElementById('main').dataset.tab = t;
+    document.getElementById('tabList').setAttribute('aria-pressed', t === 'list' ? 'true' : 'false');
+    document.getElementById('tabMap').setAttribute('aria-pressed', t === 'map' ? 'true' : 'false');
+    if (t === 'map' && map) setTimeout(function () { map.invalidateSize(); render(); }, 30);
+  }
+  document.getElementById('tabList').addEventListener('click', function () { setTab('list'); });
+  document.getElementById('tabMap').addEventListener('click', function () { setTab('map'); });
+  document.getElementById('licBtn').addEventListener('click', openLicense);
+
+  /* ========== 起動 ========== */
+  S.shops = expandSeed();
+  initMap();
+  render();
+  if (map) setTimeout(function () { map.invalidateSize(); render(); }, 60);
+})();
+</script>

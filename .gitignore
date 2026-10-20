@@ -1,0 +1,4 @@
+node_modules/
+seed.json
+app.check.js
+*.log
